@@ -9,7 +9,7 @@
     [ETL] Eun T. Leem (eunleem@gmail.com)
 
   Last Modified Date
-    Jun 17, 2015
+    Jul 01, 2015
   
   History
     September 23, 2013
@@ -37,6 +37,7 @@
 #include <functional> 
 #include <fstream>
 #include <iostream>
+#include <iomanip> // put_time
 #include <locale>
 #include <string>
 #include <sstream> // stringstream
@@ -44,13 +45,14 @@
 #include <utility>
 
 #include <cstdio>
+#include <cstdlib> // srand rand
 #include <ctime> // time_t time() gmtime() strftime() struct tm
 #include <cstring> // memset()
 
 #include <dirent.h> // opendir()
 #include <sys/ipc.h> // ftok()
 #include <sys/types.h> // ftok() key_t
-#include <sys/stat.h> // stat()
+#include <sys/stat.h> // stat() mkdir()
 #include <unistd.h> // fcntl(), getpagesize()
 #include <fcntl.h> // fcntl()
 
@@ -92,6 +94,10 @@ namespace Util
   std::string Timestamp();
   std::string TimeToString(std::chrono::system_clock::time_point tp);
 
+namespace Test {
+  size_t RandomNumber(size_t max, size_t min = 0);
+}
+
 namespace File {
   ssize_t GetSize(std::fstream& file);
 
@@ -105,6 +111,11 @@ namespace File {
 
   bool _isFileExisting ( const char* filePath, bool ifNotCreate = false );
   bool _isDirectoryExisting ( const char* );
+
+  bool CreateDirectory(std::string path);
+
+  bool Rename(std::string oldName, std::string newName);
+  bool Remove(std::string filePath);
 
   template<typename LEN_T>
   ssize_t WriteString(std::ostream& os, const std::string& str) {
@@ -142,15 +153,15 @@ namespace Time {
       uint8_t second = 0,
       bool getUtc = false);
 
-  string Timestamp(const string& format = "%F %T %Z");
-  string TimeToString(datetime tp,
-      const string& format = "%F %T %Z");
-  string TimeToString(steadytime tp,
-      const string& format = "%F %T %Z");
 
-  string TimeToString(time_t rawTime,
-      const string& format = "%F %T %Z");
+  std::string Timestamp(const string& format = "%F %T %Z");
+  std::string TimestampNum();
+  std::string TimeToString(const datetime tp, const string& format = "%F %T %Z");
+  std::string TimeToString(const steadytime tp, const string& format = "%F %T %Z");
 
+  std::string TimeToString(const time_t rawTime, const string& format = "%F %T %Z");
+
+  time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point tp);
 }
 
 

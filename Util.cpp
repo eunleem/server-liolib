@@ -8,26 +8,32 @@ namespace Util {
 using std::string;
 
 bool IsDirectoryExistent( const string& dirPath ) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
   return File::_isDirectoryExisting( dirPath.c_str() );
 }
 
 bool IsDirectoryExisting( const char* dirPath ) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
   return File::_isDirectoryExisting( dirPath );
 }
 
 bool IsDirectoryExisting ( const string& dirPath ) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
   return File::_isDirectoryExisting( dirPath.c_str() );
 }
 
 bool IsFileExistent (const std::string& filePath, bool ifNotCreate) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
   return File::_isFileExisting(filePath.c_str(), ifNotCreate);
 }
 
 bool IsFileExisting ( const char* filePath, bool ifNotCreate ) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
   return File::_isFileExisting(filePath, ifNotCreate);
 }
 
 bool IsFileExisting ( const string& filePath, bool ifNotCreate ) {
+  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
   return File::_isFileExisting(filePath.c_str(), ifNotCreate);
 }
 
@@ -50,7 +56,7 @@ key_t GenerateUniqueKey ( string& keyFilePath, int projId ) {
   return ftok ( keyFilePath.c_str(), projId );
 }
 
-string Timestamp() {
+std::string Timestamp() {
   DEBUG_cerr << "DEPRECATED. Use Util::Time::Timestamp() instead." << endl; 
   time_t rawTime;
   struct tm* gmtTime;
@@ -71,9 +77,15 @@ string Timestamp() {
   return string(buffer);
 }
 
-string TimeToString(std::chrono::system_clock::time_point tp) {
+std::string TimeToString(std::chrono::system_clock::time_point tp) {
   DEBUG_cerr << "DEPRECATED. Use Util::Time::TimeToString(arg) instead." << endl; 
   return Util::Time::TimeToString(tp);
+}
+
+namespace Test {
+  size_t RandomNumber(size_t max, size_t min) {
+    return rand() % max + min;
+  }
 }
 
 namespace File {
@@ -132,6 +144,48 @@ namespace File {
     } 
 
     return isExistent;
+  }
+
+  bool CreateDirectory(std::string path) {
+    int result = mkdir(path.c_str(), S_IRWXU | S_IRWXG);
+    if (result == -1) {
+      DEBUG_cerr << "Failed to create directory. errno: " << errno << " path: " << path << endl;
+      return false;
+    } 
+
+    return true;
+  }
+
+  bool Rename(std::string oldName, std::string newName) {
+    bool isExisting = File::_isFileExisting(oldName.c_str());
+    if (isExisting == false) {
+      DEBUG_cerr << "File does not exist. Rename Failed." << endl; 
+      return false;
+    } 
+
+    int result = std::rename(oldName.c_str(), newName.c_str());
+    if (result != 0) {
+      DEBUG_cerr << "Rename Failed. errno: " << errno << endl; 
+      return false;
+    } 
+
+    return true;
+  }
+
+  bool Remove(std::string filePath) {
+    bool isExisting = File::_isFileExisting(filePath.c_str());
+    if (isExisting == false) {
+      DEBUG_cerr << "File does not exist. Remove Failed." << endl; 
+      return false;
+    } 
+
+    int result = std::remove(filePath.c_str());
+    if (result != 0) {
+      DEBUG_cerr << "Remove failed. errno: " << errno << endl; 
+      return false;
+    } 
+
+    return true;
   }
 
   ssize_t WriteString(std::ostream& os, const std::string& str) {
@@ -199,7 +253,7 @@ namespace Time {
     timeinfo->tm_hour = hour;
     timeinfo->tm_min = minute;
     timeinfo->tm_sec = second;
-    timeinfo->tm_isdst = -1; // -1 allows mktime() to automatically configure it;
+    timeinfo->tm_isdst = -1; // -1 allows mktime() to configure it automatically
 
     rawTime = mktime(timeinfo);
     if (rawTime == -1) {
@@ -211,37 +265,33 @@ namespace Time {
   }
 
   std::string Timestamp(const string& format) {
-    return TimeToString(std::chrono::system_clock::now());
+    return TimeToString(std::chrono::system_clock::now(), format);
   }
 
-  std::string TimeToString(steadytime tp, const string& format) {
-    DEBUG_FUNC_START;
-    DEBUG_cerr << "NOT YET IMPLEMENTED." << endl; 
-    throw std::exception();
-    return "";
+  std::string TimestampNum() {
+    return TimeToString(std::chrono::system_clock::now(), "%Y%m%d%H%M%S");
   }
 
-  std::string TimeToString(datetime tp, const std::string& format) {
+  std::string TimeToString(const steadytime tp, const string& format) {
+    std::time_t rawTime = Time::steady_clock_to_time_t(tp);
+    return TimeToString(rawTime, format);
+  }
+
+  time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point t ) {
+      return std::chrono::system_clock::to_time_t(
+          std::chrono::system_clock::now() +
+          (t - std::chrono::steady_clock::now()));
+  }
+
+  std::string TimeToString(const datetime tp, const std::string& format) {
     std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
     return TimeToString(rawTime, format);
   }
 
-  std::string TimeToString(time_t rawTime, const std::string& format) {
-    struct tm* time_info;
-    char buffer[128];
-
-    memset(buffer, 0, sizeof(buffer));
-    
-    time_info = localtime(&rawTime);
-
-    // Time to Formatted String
-    //   http://www.cplusplus.com/reference/ctime/strftime/   
-    //   %F = yyyy-MM-dd
-    //   %T = HH:mm:ss
-    //   %Z = GMT or PST (Time Zone)
-    strftime (buffer, sizeof(buffer), format.c_str(), time_info);
-   
-    return std::string(buffer);
+  std::string TimeToString(const time_t rawTime, const std::string& format) {
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&rawTime), format.c_str());
+    return ss.str();
   }
 
 }
@@ -565,6 +615,9 @@ namespace String {
       case 4:
         pool = random_char_alphanum;
         break;
+      case 5:
+        pool = random_char_alphanum_special;
+        break;
       default:
         DEBUG_cerr << "Complexity cannot be greater than 4, less than 0. Complexity Set to 3." << endl; 
         pool = random_char_alpha;
@@ -574,7 +627,7 @@ namespace String {
     const unsigned int stringPoolLength = strlen(pool);
 
     std::string result;
-    result.resize(length);
+    result.reserve(length);
 
     for (size_t i = 0; length > i; i++) {
       result += pool[rand() % stringPoolLength];
@@ -600,6 +653,9 @@ namespace String {
         break;
       case 4:
         pool = random_char_alphanum;
+        break;
+      case 5:
+        pool = random_char_alphanum_special;
         break;
       default:
         DEBUG_cerr << "Complexity cannot be greater than 4, less than 0. Complexity Set to 3." << endl; 
@@ -636,7 +692,6 @@ namespace String {
           } else {
             two[j] = (*c);
           }
-
 
           if (two[j] >= 'A' && two[j] <= 'F') {
             // Hex Char to Int

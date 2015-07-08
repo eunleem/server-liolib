@@ -8,7 +8,7 @@
     [ETL] Eun T. Leem (eunleem@gmail.com)
 
   Last Modified Date
-    Jun 26, 2015
+    Jun 30, 2015
   
   History
     May 29, 2015
@@ -69,9 +69,9 @@ public:
     bool result = this->open();
     if (result == true) {
       this->status_ = Status::OPEN;
-      DEBUG_cout << "Openable object has been opened." << endl; 
+      //DEBUG_cout << "Openable object has been opened." << endl; 
     } else {
-      DEBUG_cerr << "Coult not open." << endl; 
+      DEBUG_cerr << "Could not open." << endl; 
     }
 
     return result;
@@ -86,7 +86,7 @@ public:
     bool result = this->close();
     if (result == true) {
       this->status_ = Status::CLOSE;
-      DEBUG_cout << "Openable object has been closed." << endl; 
+      //DEBUG_cout << "Openable object has been closed." << endl; 
     } else {
       DEBUG_cerr << "Coult not open." << endl; 
     }

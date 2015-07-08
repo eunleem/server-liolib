@@ -300,8 +300,8 @@ public:
       return false;
     }
   }
-  
-  string GetValue() const {
+
+  std::string ToString() const {
     if (this->IsNull() == false) {
       size_t length = this->length;
       if (length == 0) {
@@ -312,6 +312,11 @@ public:
       DEBUG_clog << "GetValue is called on empty DataBlock<string*>. Returning Empty string." << endl; 
       return "";
     }
+  }
+  
+  std::string GetValue() const {
+    DEBUG_cerr << "DEPRECATED! Use ToString() instead." << endl; 
+    return this->ToString();
   }
 
   bool IsSameString(const char* comparingStr) const {
