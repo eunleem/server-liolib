@@ -265,16 +265,16 @@ namespace Time {
   }
 
   std::string Timestamp(const string& format) {
-    return TimeToString(std::chrono::system_clock::now(), format);
+    return ToString(std::chrono::system_clock::now(), format);
   }
 
   std::string TimestampNum() {
-    return TimeToString(std::chrono::system_clock::now(), "%Y%m%d%H%M%S");
+    return ToString(std::chrono::system_clock::now(), "%Y%m%d%H%M%S");
   }
 
   std::string TimeToString(const steadytime tp, const string& format) {
     std::time_t rawTime = Time::steady_clock_to_time_t(tp);
-    return TimeToString(rawTime, format);
+    return ToString(rawTime, format);
   }
 
   time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point t ) {
@@ -285,15 +285,33 @@ namespace Time {
 
   std::string TimeToString(const datetime tp, const std::string& format) {
     std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
-    return TimeToString(rawTime, format);
+    return ToString(rawTime, format);
   }
 
-  std::string TimeToString(const time_t rawTime, const std::string& format) {
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&rawTime), format.c_str());
-    return ss.str();
+  std::string ToString(const datetime tp, const std::string& format) {
+    std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
+    return ToString(rawTime, format);
   }
 
+
+  std::string ToString(const time_t rawTime, const std::string& format) {
+    struct tm* gmtTime;
+    char buffer[30];
+    memset(buffer, 0, sizeof(buffer));
+    gmtTime = gmtime(&rawTime);
+
+    // Time to Formatted String
+    //   http://www.cplusplus.com/reference/ctime/strftime/   
+    //   %F = yyyy-MM-dd
+    //   %T = HH:mm:ss
+    //   %Z = GMT or PST (Time Zone)
+    strftime (buffer, 30, format.c_str(), gmtTime);
+   
+    return std::string(buffer);
+    //std::stringstream ss;
+    //ss << std::put_time(std::localtime(&rawTime), format.c_str());
+    //return ss.str();
+  }
 }
 
 namespace String {
@@ -919,12 +937,135 @@ namespace String {
     return count;
   }
 
+  size_t TrimIncompleteUTF8(std::string& str) {
+    // Scans backward from the end of string.
+    //const char* begptr = &str.front();
+    const char* cptr = &str.back();
+    int num = 1;
+    int numBytesToTruncate = 0;
+
+    const int NUMLOOPS = str.length() > 4 ? 4 : str.length();
+
+    for (int i = 0; i < NUMLOOPS; ++i) {
+      if ((*cptr & 0x80) == 0x80) { // If char bit starts with 1xxxxxxx
+        numBytesToTruncate += 1;
+        // It's a part of unicode character!
+        // Find the first byte in the unicode character!
+        
+        //if (((*cptr ^ 0xFC) & 0xFE) == 0x00) { if (num == 6) { return 0; } break; }
+        //if (((*cptr ^ 0xF8) & 0xFC) == 0x00) { if (num == 5) { return 0; } break; }
+        
+        // If char binary is 11110000, it means it's a 4 bytes long unicode.
+        if (((*cptr ^ 0xF0) & 0xF8) == 0x00) { if (num == 4) { return 0; } break; }
+        if (((*cptr ^ 0xE0) & 0xF0) == 0x00) { if (num == 3) { return 0; } break; }
+        if (((*cptr ^ 0xC0) & 0xE0) == 0x00) { if (num == 2) { return 0; } break; }  
+
+        num += 1;
+      } else {
+        // If char bit does not start with 1, nothing to truncate!
+        break;
+      }
+
+      cptr -= 1;
+    }
+    str.resize(str.length() - numBytesToTruncate);
+    return numBytesToTruncate;
+  }
+
+  std::string JsonEncode(const std::string& str) {
+    DEBUG_cerr << "JsonEncode is NOT FULLY IMPLEMENTED and TESTES. DONT USE IT FOR NOW." << endl;
+    // #REF: http://stackoverflow.com/a/27516892/4694036
+    std::string escaped;
+    escaped.reserve(str.length() * 2);
+
+    for (const auto& c : str) {
+      switch (c) {
+        case '\r':
+        case '\n': escaped += "\\n";
+                   break;
+        case '\"': escaped += "\\\"";
+                   break;
+        case '\t': escaped += "\\t";
+                   break;
+        case '\\': escaped += "\\\\";
+                   break;
+        case '\b': break; // IGNORED
+        case '\f': break; // IGNORED
+        default:
+          escaped += c;
+          break;
+      } 
+    } 
+
+    escaped.shrink_to_fit();
+    return escaped;
+  }
+
+  bool IsSafeForJson(const std::string& str) {
+    // Rename this function IsSafeJsonString() later
+    // #REF: http://www.ietf.org/rfc/rfc4627.txt
+    if (str.back() == '\\') {
+      DEBUG_cerr << "Cannot end with Backslash." << endl;
+      return false;
+    }
+    for (int i = 0; i < str.length(); ++i) {
+      const char* c = &str[i];
+      switch (*c) {
+        case '\n': 
+        case '\r':
+          DEBUG_cerr << "Detected newLine" << endl;
+          return false;
+        case '"':
+          DEBUG_cerr << "Detected double quotes" << c << endl;
+          return false;
+        case '\t':
+          DEBUG_cerr << "Detected tab." << endl;
+          return false;
+        case '\b':
+          DEBUG_cerr << "Detected \\b." << endl;
+          return false;
+        case '\f':
+          DEBUG_cerr << "Detected \\f" << c << endl;
+          return false;
+        case '\\':
+          switch (*(++c)) {
+            case '\\':
+            case 'n':
+            case 'r':
+            case 't':
+            case '"':
+              ++i;
+              // Well escaped chars so Continue
+              continue;
+            default:
+              DEBUG_cerr << "Invalid escaped char" << endl;
+              return false;
+          }
+
+        default:
+          break;
+      } 
+    }
+
+    return true;
+  }
+
+  bool IsUserInputSafe(const std::string& str) {
+    if (str.find("<") != std::string::npos) {
+      return false;
+    }
+
+    if (str.find(">") != std::string::npos) {
+      return false;
+    }
+
+    return true;
+  }
+
   // THIS IS REALLY BAD AND DANGEROUS FUNCTION.
   // DON'T USE IT OTHER THAN TEMPORARY DEVELOPMENT PURPOSE.
   size_t Append(char* ptr, const string& str, size_t pos) {
-    PROD {
-      //DEBUG_cerr << "This function is DANGEROUS and should not be used for Production." << endl; 
-    }
+    DEBUG_cerr << "This function is DANGEROUS and should not be used for Production." << endl; 
     ptr += pos;
     strncpy(ptr, str.c_str(), str.length());
     return pos + str.length();

@@ -9,13 +9,14 @@
     [ETL] Eun T. Leem (eunleem@gmail.com)
 
   Last Modified Date
-    Jul 01, 2015
+    Jul 30, 2015
   
   History
     September 23, 2013
       Created
 
   ToDos
+    CONVERT TEST TO GTEST and ADD MORE TESTS
     
 
 
@@ -159,7 +160,10 @@ namespace Time {
   std::string TimeToString(const datetime tp, const string& format = "%F %T %Z");
   std::string TimeToString(const steadytime tp, const string& format = "%F %T %Z");
 
-  std::string TimeToString(const time_t rawTime, const string& format = "%F %T %Z");
+  std::string ToString(const datetime tp, const string& format = "%F %T %Z");
+
+  std::string ToString(const time_t rawTime, const string& format = "%F %T %Z");
+  
 
   time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point tp);
 }
@@ -187,27 +191,27 @@ namespace String {
   }
 
   // trim from start
-  static inline string& TrimBeg(std::string &s) {
+  static inline std::string& TrimBeg(std::string &s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
     return s;
   }
 
   // trim from end
-  static inline string& TrimEnd(std::string &s) {
+  static inline std::string& TrimEnd(std::string &s) {
     s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
     return s;
   }
 
   // trim from both ends
-  static inline string& Trim(std::string &s) {
+  static inline std::string& Trim(std::string &s) {
     return TrimBeg(TrimEnd(s));
   }
 
-  ssize_t Find(const string& toFind, char* location, size_t length);
+  ssize_t Find(const std::string& toFind, char* location, size_t length);
 
-  ssize_t Find(const string& toFind, lio::DataBlock<char*>& block);
+  ssize_t Find(const std::string& toFind, lio::DataBlock<char*>& block);
 
-  bool Compare(char* location, size_t length, const string& str);
+  bool Compare(char* location, size_t length, const std::string& str);
 
   std::string Retrieve(char* location, size_t length);
   
@@ -248,7 +252,18 @@ namespace String {
   bool            UriDecode(const void* address, const size_t length, string* decoded); 
   ssize_t         UriDecodeFly(char* ptr, size_t length);  // Returns finished length;
 
+
+  ssize_t         SubstrUtf8(std::string& str, size_t maxBytes);
+
+  size_t          TrimIncompleteUTF8(std::string& str);
+
+  std::string     JsonEncode(const std::string& str);
+  bool            IsSafeForJson(const std::string& str);
+
+  bool            IsUserInputSafe(const std::string& str);
+
   size_t          Append(char* ptr, const string& str, size_t pos);
+
 
 
 }
