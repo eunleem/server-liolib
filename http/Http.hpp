@@ -8,12 +8,14 @@
 
 #include "liolib/Debug.hpp"
 
+#include <chrono> // system_clock::time_point
 #include <string> // string
 
 namespace lio {
 namespace http {
 
 using std::string;
+typedef std::chrono::system_clock::time_point datetime;
 
 enum class HttpVersion : uint8_t {
   V1_0,
@@ -201,6 +203,22 @@ const string ResponseCodeString[] = {
   "414 Request-URI Too Long",
   "500 Internal Server Error",
   "503 Service Unavailable"
+};
+
+
+struct CookieOptions {
+  CookieOptions() :
+    domain(),
+    path(),
+    expires(),
+    isSecure(false),
+    isHttpOnly(false)
+  {}
+  std::string domain;
+  std::string path;
+  datetime expires;
+  bool isSecure;
+  bool isHttpOnly;
 };
 
 

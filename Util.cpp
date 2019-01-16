@@ -2,62 +2,56 @@
 
 #define _UNIT_TEST false
 
-#include "liolib/Test.hpp"
 
 namespace Util {
-using std::string;
 
-bool IsDirectoryExistent( const string& dirPath ) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
+bool IsDirectoryExistent( const std::string& dirPath ) {
+  DEPRECATED_FUNC("Util::File::IsDirectoryExisting");
   return File::_isDirectoryExisting( dirPath.c_str() );
 }
 
 bool IsDirectoryExisting( const char* dirPath ) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
+  DEPRECATED_FUNC("Util::File::IsDirectoryExisting");
   return File::_isDirectoryExisting( dirPath );
 }
 
-bool IsDirectoryExisting ( const string& dirPath ) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsDirectoryExisting instead." << endl; 
+bool IsDirectoryExisting ( const std::string& dirPath ) {
+  DEPRECATED_FUNC("Util::File::IsDirectoryExisting");
   return File::_isDirectoryExisting( dirPath.c_str() );
 }
 
 bool IsFileExistent (const std::string& filePath, bool ifNotCreate) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
+  DEPRECATED_FUNC("Util::File::IsFileExisting");
   return File::_isFileExisting(filePath.c_str(), ifNotCreate);
 }
 
 bool IsFileExisting ( const char* filePath, bool ifNotCreate ) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
+  DEPRECATED_FUNC("Util::File::IsFileExisting");
   return File::_isFileExisting(filePath, ifNotCreate);
 }
 
-bool IsFileExisting ( const string& filePath, bool ifNotCreate ) {
-  DEBUG_cerr << "DEPRECATED! Use Util::File::IsFileExisting instead." << endl; 
+bool IsFileExisting ( const std::string& filePath, bool ifNotCreate ) {
+  DEPRECATED_FUNC("Util::File::IsFileExisting");
   return File::_isFileExisting(filePath.c_str(), ifNotCreate);
 }
 
-
 /*
-
   http://linux.die.net/man/3/ftok
   2nd parameter of ftok() accepts INT type but only uses least significant 8 bits (1 byte).
-  
 */
-key_t GenerateUniqueKey ( string& keyFilePath, int projId ) {
-  
+key_t GenerateUniqueKey ( std::string& keyFilePath, int projId ) {
   // #TODO: Check whether the file exists or not.
   if ( projId > 128 || projId <= 0) {
     // Minor Error. Show Warning or leave a warning Log.
     // Doesn't have to stop the program tho.
-    DEBUG_cerr << "ProjId must be less than 128 and greater than 0." << endl; 
+    LOG_err << "ProjId must be less than 128 and greater than 0." << endl; 
     throw;
   }
   return ftok ( keyFilePath.c_str(), projId );
 }
 
 std::string Timestamp() {
-  DEBUG_cerr << "DEPRECATED. Use Util::Time::Timestamp() instead." << endl; 
+  DEPRECATED_FUNC("Util::Time::Timestamp()");
   time_t rawTime;
   struct tm* gmtTime;
   char buffer[30];
@@ -74,12 +68,61 @@ std::string Timestamp() {
   //   %Z = GMT or PST (Time Zone)
   strftime (buffer, 30, "%F %T %Z", gmtTime);
  
-  return string(buffer);
+  return std::string(buffer);
 }
 
 std::string TimeToString(std::chrono::system_clock::time_point tp) {
-  DEBUG_cerr << "DEPRECATED. Use Util::Time::TimeToString(arg) instead." << endl; 
+  DEPRECATED_FUNC("Util::Time::ToString()");
   return Util::Time::TimeToString(tp);
+}
+
+bool Retry(std::function<Result()> tryWhat, unsigned int numRetry,
+           unsigned int intervalSeconds) {
+
+  unsigned int retryCount = 0;
+  while (numRetry > retryCount) {
+    Result result = tryWhat();
+    if (result == Result::GOOD) {
+      return true;
+    }
+    if (result == Result::INTERRUPT) {
+      LOG_info << "Stop retrying and return right away." << endl;
+      return false;
+    }
+    LOG_info << "Trying again after " << intervalSeconds << " seconds... "
+             << "(" << ++retryCount << "/" << numRetry << ")" << endl;
+    sleep(intervalSeconds);
+  }
+  return false;
+}
+
+namespace Convert {
+
+  std::string ToString(const struct sockaddr& in_addr) {
+    const socklen_t in_len = sizeof(in_addr);
+    char hostBuf[NI_MAXHOST], portBuf[NI_MAXSERV];
+    int result = -1;
+    result = getnameinfo (&(in_addr), in_len,
+                          hostBuf, sizeof(hostBuf),
+                          portBuf, sizeof(portBuf),
+                          NI_NUMERICHOST | NI_NUMERICSERV);
+    if (result == (int)Result::ERROR) {
+      LOG_warn << "connection info error... errno: " << errno << endl;
+      return "";
+    }
+
+    const std::string ipaddrStr =  std::string(hostBuf) + ":" + std::string(portBuf);
+    LOG_info << "Converted Ip Address to String. " << ipaddrStr << endl;
+    return ipaddrStr;
+  }
+
+  uint32_t ToUInt32(const struct sockaddr& in_addr) {
+    struct sockaddr_in* addr_in = (struct sockaddr_in*) &in_addr;
+    DEBUG_temp << "addr_in->sin_addr.s_addr:" << addr_in->sin_addr.s_addr << endl;
+    uint32_t result = static_cast<uint32_t>(addr_in->sin_addr.s_addr);
+    DEBUG_temp << "uint32_t:" << result << endl;
+    return result;
+  }
 }
 
 namespace Test {
@@ -91,7 +134,7 @@ namespace Test {
 namespace File {
   ssize_t GetSize(std::fstream& file) {
     if (file.is_open() == false) {
-      DEBUG_cerr << "Error" << endl; 
+      LOG_err << "Coult not open file to Get Size" << endl; 
       return -1;
     } 
 
@@ -102,11 +145,17 @@ namespace File {
     return static_cast<ssize_t>(pos);
   }
 
-  bool IsDirectoryExisting ( const string& dirPath ) {
-    return File::_isDirectoryExisting( dirPath.c_str() );
+  bool IsDirectoryExisting ( const std::string& dirPath, bool ifNotCreate ) {
+    bool isExisting = File::_isDirectoryExisting( dirPath.c_str() );
+    if (isExisting == false) {
+      if (ifNotCreate == true) {
+        isExisting = File::CreateDirectory(dirPath);
+      }
+    }
+    return isExisting;
   }
 
-  bool IsFileExisting ( const string& filePath, bool ifNotCreate ) {
+  bool IsFileExisting ( const std::string& filePath, bool ifNotCreate ) {
     return File::_isFileExisting(filePath.c_str(), ifNotCreate);
   }
 
@@ -134,10 +183,10 @@ namespace File {
         std::fstream file(filePath, std::ios::out);
         if (file.is_open() == true) {
           file.close();
-          DEBUG_cout << "File Created." << endl; 
+          LOG_info << "File Created. path: " << filePath << endl; 
           return true;
         } else {
-          DEBUG_cerr << "Could not create file." << endl; 
+          LOG_err << "Could not create file. filePath: " << filePath << endl; 
           return false;
         }
       } 
@@ -146,10 +195,10 @@ namespace File {
     return isExistent;
   }
 
-  bool CreateDirectory(std::string path) {
+  bool CreateDirectory(const std::string& path) {
     int result = mkdir(path.c_str(), S_IRWXU | S_IRWXG);
     if (result == -1) {
-      DEBUG_cerr << "Failed to create directory. errno: " << errno << " path: " << path << endl;
+      DEBUG_warn << "Failed to create directory. errno: " << errno << " path: " << path << endl;
       return false;
     } 
 
@@ -159,13 +208,13 @@ namespace File {
   bool Rename(std::string oldName, std::string newName) {
     bool isExisting = File::_isFileExisting(oldName.c_str());
     if (isExisting == false) {
-      DEBUG_cerr << "File does not exist. Rename Failed." << endl; 
+      LOG_warn << "File does not exist. Rename Failed." << endl; 
       return false;
     } 
 
     int result = std::rename(oldName.c_str(), newName.c_str());
     if (result != 0) {
-      DEBUG_cerr << "Rename Failed. errno: " << errno << endl; 
+      LOG_warn << "Rename Failed. errno: " << errno << endl; 
       return false;
     } 
 
@@ -175,36 +224,60 @@ namespace File {
   bool Remove(std::string filePath) {
     bool isExisting = File::_isFileExisting(filePath.c_str());
     if (isExisting == false) {
-      DEBUG_cerr << "File does not exist. Remove Failed." << endl; 
+      LOG_warn << "File does not exist. Remove Failed." << endl; 
       return false;
     } 
 
     int result = std::remove(filePath.c_str());
     if (result != 0) {
-      DEBUG_cerr << "Remove failed. errno: " << errno << endl; 
+      LOG_err << "Remove failed. errno: " << errno << endl; 
       return false;
     } 
 
     return true;
   }
 
-  ssize_t WriteString(std::ostream& os, const std::string& str) {
+  ssize_t WriteString(std::ostream& os, const std::string& str, unsigned fixedMaxLength) {
+    DEPRECATED_FUNC("WriteString<>");
     uint32_t strlen = str.length();
     os.write((char*)&strlen, sizeof(strlen));
     os.write(str.c_str(), strlen);
 
+    if (fixedMaxLength > 0) {
+      if (fixedMaxLength < str.length()) {
+        LOG_alert << "String length exceeds the fixedMaxLength. "
+                     "strlen: " << (int)str.length() << endl;
+      }
+      const unsigned skip = fixedMaxLength - str.length();
+      for (unsigned i = 0; i < skip; ++i) {
+        os.write("\0", 1);
+      }
+    }
+
     return strlen;
   }
 
-  ssize_t ReadString(std::istream& is, std::string& str) {
+  ssize_t ReadString(std::istream& is, std::string& str, unsigned fixedMaxLength) {
+    DEPRECATED_FUNC("ReadString<>");
     uint32_t strlen = 0;
     is.read((char*)&strlen, sizeof(strlen));
     str.resize(strlen);
     is.read((char*)str.c_str(), strlen);
 
+    if (fixedMaxLength > 0) {
+      if (fixedMaxLength < str.length()) {
+        LOG_alert << "Stored length exceeds Max Length or Fixed length. "
+                     "storedLength: " << str.length() << endl;
+      }
+      const unsigned skip = fixedMaxLength - str.length();
+      char a;
+      for (unsigned i = 0; i < skip; ++i) {
+        is.read(&a, 1);
+      }
+    }
+
     return str.length();
   }
-
 }
 
 namespace Time {
@@ -217,6 +290,10 @@ namespace Time {
       std::chrono::duration_cast<std::chrono::milliseconds>(tp.time_since_epoch()).count();
 
     return milliseconds_since_epoch;
+  }
+
+  uint64_t GetMillisecondsSinceEpoch(steadytime tp) {
+    return static_cast<uint64_t>(steady_clock_to_time_t(tp)) * 1000;
   }
 
   // Without any argument, it will return Today's date with 00:00:00 time.
@@ -257,67 +334,85 @@ namespace Time {
 
     rawTime = mktime(timeinfo);
     if (rawTime == -1) {
-      DEBUG_cerr << "Could not convert to datetime." << endl; 
+      LOG_err << "Could not convert to datetime." << endl; 
       throw std::exception();
     } 
 
     return std::chrono::system_clock::from_time_t(rawTime);
   }
 
-  std::string Timestamp(const string& format) {
-    return ToString(std::chrono::system_clock::now(), format);
+  std::string Timestamp(const std::string& format, bool in_localtime) {
+    return ToString(std::chrono::system_clock::now(), format, in_localtime);
   }
 
   std::string TimestampNum() {
     return ToString(std::chrono::system_clock::now(), "%Y%m%d%H%M%S");
   }
 
-  std::string TimeToString(const steadytime tp, const string& format) {
+  std::string TimeToString(const datetime tp, const std::string& format) {
+    DEPRECATED_FUNC("ToString()");
+    std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
+    return ToString(rawTime, format);
+  }
+
+  std::string TimeToString(const steadytime tp, const std::string& format) {
+    DEPRECATED_FUNC("ToString()");
     std::time_t rawTime = Time::steady_clock_to_time_t(tp);
     return ToString(rawTime, format);
   }
 
-  time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point t ) {
-      return std::chrono::system_clock::to_time_t(
-          std::chrono::system_clock::now() +
-          (t - std::chrono::steady_clock::now()));
+  std::string ToString(const steadytime tp, const std::string& format,
+                       bool in_localtime) {
+    std::time_t rawTime = Time::steady_clock_to_time_t(tp);
+    return ToString(rawTime, format, in_localtime);
   }
 
-  std::string TimeToString(const datetime tp, const std::string& format) {
+  std::string ToString(const datetime tp, const std::string& format,
+                       bool in_localtime) {
     std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
-    return ToString(rawTime, format);
+    return ToString(rawTime, format, in_localtime);
   }
 
-  std::string ToString(const datetime tp, const std::string& format) {
-    std::time_t rawTime = std::chrono::system_clock::to_time_t(tp);
-    return ToString(rawTime, format);
-  }
+  std::string ToString(const time_t rawTime, const std::string& format,
+                       bool in_localtime) {
+    struct tm* time;
+    std::string buffer(32, '\0');
+    if (in_localtime == true) {
+      time = std::localtime(&rawTime);
+    } else {
+      time = std::gmtime(&rawTime);
+    }
 
-
-  std::string ToString(const time_t rawTime, const std::string& format) {
-    struct tm* gmtTime;
-    char buffer[30];
-    memset(buffer, 0, sizeof(buffer));
-    gmtTime = gmtime(&rawTime);
+    if (Util::String::ToLower(format) == "http") {
+      const_cast<std::string&>(format) = "%a, %d %b %Y %H:%M:%S %Z";
+    }
 
     // Time to Formatted String
     //   http://www.cplusplus.com/reference/ctime/strftime/   
     //   %F = yyyy-MM-dd
     //   %T = HH:mm:ss
     //   %Z = GMT or PST (Time Zone)
-    strftime (buffer, 30, format.c_str(), gmtTime);
-   
-    return std::string(buffer);
+    strftime((char*)buffer.c_str(), 32, format.c_str(), time);
+
+    std::size_t len = std::strlen(buffer.c_str());
+    buffer.resize(len);
+    return buffer;
     //std::stringstream ss;
     //ss << std::put_time(std::localtime(&rawTime), format.c_str());
     //return ss.str();
+  }
+
+  time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point t) {
+      return std::chrono::system_clock::to_time_t(
+          std::chrono::system_clock::now() +
+          (t - std::chrono::steady_clock::now()));
   }
 }
 
 namespace String {
 
 
-  unsigned int ToUInt (const string &value) {
+  unsigned int ToUInt (const std::string &value) {
     return To<unsigned int>(value);
   }
 
@@ -325,7 +420,7 @@ namespace String {
     return To<unsigned int>(value);
   }
 
-  ssize_t Find (const string& toFind, lio::DataBlock<char*>& block) {
+  ssize_t Find (const std::string& toFind, lio::DataBlock<char*>& block) {
     // #TODO: NOT thoroughly tested yet.
     const size_t index = block.GetIndex();
     const size_t length = block.GetLength();
@@ -351,7 +446,7 @@ namespace String {
     return -1;
   }
 
-  ssize_t Find (const string& toFind, char* location, size_t length) {
+  ssize_t Find (const std::string& toFind, char* location, size_t length) {
     // #TODO: NOT thoroughly tested yet.
 
     size_t toFindIndex = 0;
@@ -372,32 +467,30 @@ namespace String {
     return -1;
   }
 
-  bool Compare (char* location, size_t length, const string& str) {
-    size_t toFindIndex = 0;
-    for (size_t i = 0; length > i; ++i) {
-      if ((*location) == str[toFindIndex]) {
-        toFindIndex += 1;
-        if (toFindIndex == str.length()) {
-          return true;
-        } 
-      } else if ((*location) == '\0') {
-        // End of String reached and Not Found.
-        return false;
-      } else {
-        toFindIndex = 0;
-      }
-      location += 1;
-    } 
-    return false;
+  bool Compare (char* location, size_t length, const std::string& str) {
+    return strncmp(location, str.c_str(), length) == 0;
   }
 
   std::string Retrieve (char* location, size_t length) {
-    DEBUG_cerr << "DEPRECATED. Use string constructor string(char*, length) instead." << endl; 
+    DEPRECATED_FUNC("std::string ctor std::string(char*, length)");
     return std::string(location, length);
   }
 
-  std::string RetrieveBetween(char* startLocation, const string& endStr, size_t lengthMax)
-  {
+  std::string CaptureBetween(const std::string& src, unsigned startOffset,
+                             const std::string& endStr) {
+    size_t foundPos = src.find(endStr, startOffset);
+    if (foundPos == std::string::npos) {
+      LOG_warn << "CaptureBetween could not find the endStr." << endl;
+      return "";
+    }
+
+    std::string captured = src.substr(startOffset, foundPos);
+    DEBUG_result << "CaptureBetween captured " << captured << endl;
+    return captured;
+  }
+
+  std::string RetrieveBetween(char* startLocation, const std::string& endStr,
+                              size_t lengthMax) {
     size_t endStrIndex = 0;
     std::string between;
     between.reserve(lengthMax);
@@ -420,85 +513,82 @@ namespace String {
     return "";
   }
   
-  bool ToUpperFly (string& value) {
-    size_t length = value.length();
-    for (unsigned int i = 0; length > i; i++) {
-      if (value[i] >= 'a' && value[i] <= 'z') {
-        value[i] = static_cast<char>( (int) value[i] - 32 );
-      }
+  bool ToUpperFly (std::string& value) {
+    for (auto& c : value) {
+      c = static_cast<char>(std::toupper(c));
     }
     return true;
   }
 
   bool ToUpperFly (char* ptr, size_t length) {
-    int count = 0;
-    for (unsigned int i = 0; length > i; i++) {
-      if ((*ptr) >= 'a' && (*ptr) <= 'z') {
-        (*ptr) = static_cast<char>( (int) (*ptr) - 32 );
-        ++count;
-      }
-      ptr += 1;
+    LOG_info << "ToUpperFly for " << length << " chars." << std::endl;
+    for (unsigned int i = 0; length > i; ++i) {
+      (*ptr) = static_cast<char>( std::toupper(*ptr));
+      ptr++;
     }
-    return count > 0;
+    return true;
   }
 
-  bool ToLowerFly (string& value) {
-    size_t length = value.length();
-    for (unsigned int i = 0; length > i; i++) {
-      if (value[i] >= 'A' && value[i] <= 'Z') {
-        value[i] = static_cast<char>( (int) value[i] + 32 );
-      }
+  bool ToLowerFly (std::string& value) {
+    for (auto& c : value) {
+      c = static_cast<char>(std::tolower(c));
     }
     return true;
   }
 
   bool ToLowerFly (char* ptr, size_t length) {
-    for (unsigned int i = 0; length > i; i++) {
-      if ((*ptr) >= 'A' && (*ptr) <= 'Z') {
-        (*ptr) = static_cast<char>( (int) (*ptr) + 32 );
-      }
-      ptr += 1;
+    LOG_info << "ToLowerFly for " << length << " chars." << std::endl;
+
+    for (unsigned int i = 0; length > i; ++i) {
+      (*ptr) = static_cast<char>( std::tolower(*ptr));
+      ptr++;
     }
     return true;
   }
 
 
-  string ToUpper (const string& value) {
-    size_t length = value.length();
+  std::string ToUpper (const std::string& value) {
+    std::string upperCase;
+    upperCase.reserve(value.length());
 
-    string upperCase;
-    upperCase.reserve(length);
-
-    for (unsigned int i = 0; length > i; i++) {
-    if (value[i] >= 'a' && value[i] <= 'z') {
-      upperCase += static_cast<char>( value[i] - 32 );
-    } else {
-      upperCase += value[i];
-    }
+    for (const auto& c : value) {
+      upperCase += static_cast<char>(std::toupper(c));
     }
 
     return upperCase;
   }
 
-  string ToLower (const string& value) {
-    size_t length = value.length();
+  std::string ToLower(const std::string& value) {
+    std::string converted;
+    converted.reserve(value.length());
 
-    string lowerCase;
-    lowerCase.reserve(length);
-
-    for (unsigned int i = 0; length > i; i++) {
-      if (value[i] >= 'A' && value[i] <= 'Z') {
-        lowerCase += static_cast<char>( value[i] + 32 );
-      } else {
-        lowerCase += value[i];
-      }
+    for (const auto& c : value) {
+      converted += static_cast<char>(std::tolower(c));
     }
 
-    return lowerCase;
+    return converted;
   }
 
-  vector<string> Tokenize(const string& source, const string& delimiter) {
-    vector<string> result;
+
+  std::vector<std::string> &Split(const std::string &s, char delim, std::vector<std::string> &elems) {
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+      elems.push_back(item);
+    }
+    return elems;
+  }
+
+
+  std::vector<std::string> Split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    Util::String::Split(s, delim, elems);
+    return elems;
+  }
+
+  std::vector<std::string> Tokenize(const std::string& source, const std::string& delimiter) {
+    DEPRECATED_FUNC("Util::String::Split(std::string src, char delim)")
+    std::vector<std::string> result;
 
     if (delimiter.empty()) {
       return result;
@@ -512,7 +602,7 @@ namespace String {
       size_t sectionLength = 0;
 
       delimiterPosition = source.find(delimiter, prevDelimiterPosition);
-      if (delimiterPosition == string::npos) {
+      if (delimiterPosition == std::string::npos) {
         // CASE A: No Delimiter
         // CASE B: After Last Delimiter
         if (prevDelimiterPosition == 0) {
@@ -525,7 +615,7 @@ namespace String {
           sectionLength = source.length() - prevDelimiterPosition;
           if (sectionLength > 0) {
             // Only add section if the length is greater than 0.
-            string section = source.substr(prevDelimiterPosition, sectionLength);
+            std::string section = source.substr(prevDelimiterPosition, sectionLength);
             result.push_back(section);
           }
 
@@ -547,17 +637,17 @@ namespace String {
         
         if (delimiterPosition + delimiter.length() == source.length()) {
           // CASE D
-          string section = source.substr(prevDelimiterPosition, sectionLength);
+          std::string section = source.substr(prevDelimiterPosition, sectionLength);
           result.push_back(section);
           break;
         } else if (delimiterPosition + delimiter.length() > source.length()) {
-          cerr << "Umm..... nonono this shouldn't happen" << endl;
+          std::cerr << "Umm..... nonono this shouldn't happen" << endl;
           break; 
         }
 
         if (sectionLength > 0) {
           // CASE B
-          string section = source.substr(prevDelimiterPosition, sectionLength);
+          std::string section = source.substr(prevDelimiterPosition, sectionLength);
           result.push_back(section);
           prevDelimiterPosition = delimiterPosition + delimiter.length();
           continue;
@@ -566,7 +656,7 @@ namespace String {
           prevDelimiterPosition = delimiterPosition + delimiter.length();
           continue;
         } else {
-          cerr << "Umm this shouldn't happen." << endl;
+          std::cerr << "Umm this shouldn't happen." << endl;
           break;
         }
 
@@ -575,19 +665,19 @@ namespace String {
     return result;
   }
 
-  bool CaseInsensitiveCompare (const string& rvalue, const string& lvalue) {
+  bool CaseInsensitiveCompare (const std::string& rvalue, const std::string& lvalue) {
     if (rvalue.length() != lvalue.length()) {
       return false;
     }
 
-    string lowerRvalue = ToLower(rvalue);
-    string lowerLvalue = ToLower(lvalue);
+    std::string lowerRvalue = ToLower(rvalue);
+    std::string lowerLvalue = ToLower(lvalue);
     if (lowerRvalue == lowerLvalue) {
       return true;
     } else {
       return false;
     }
-}
+  }
 
   static const char random_char_alphanum_special[] =
     "0123456789"
@@ -616,78 +706,45 @@ namespace String {
     "0123456789";
 
   std::string RandomString(const size_t length, const unsigned int complexity) {
-    const char* pool = nullptr;
-    switch (complexity) {
-      case 0:
-        pool = random_char_numbers;
-        break;
-      case 1:
-        pool = random_char_alphaupper;
-        break;
-      case 2:
-        pool = random_char_alphauppernum;
-        break;
-      case 3:
-        pool = random_char_alpha;
-        break;
-      case 4:
-        pool = random_char_alphanum;
-        break;
-      case 5:
-        pool = random_char_alphanum_special;
-        break;
-      default:
-        DEBUG_cerr << "Complexity cannot be greater than 4, less than 0. Complexity Set to 3." << endl; 
-        pool = random_char_alpha;
-        break;
-    } 
-
-    const unsigned int stringPoolLength = strlen(pool);
+    const char* pool = _getRandomStringPool(complexity);
+    const unsigned int strPoolLength = strlen(pool);
 
     std::string result;
     result.reserve(length);
 
     for (size_t i = 0; length > i; i++) {
-      result += pool[rand() % stringPoolLength];
+      result += pool[rand() % strPoolLength];
     } 
 
     return result;
   }
 
   void RandomString(char* dest, const size_t length, const unsigned int complexity) {
-    const char* pool = nullptr;
-    switch (complexity) {
-      case 0:
-        pool = random_char_numbers;
-        break;
-      case 1:
-        pool = random_char_alphaupper;
-        break;
-      case 2:
-        pool = random_char_alphauppernum;
-        break;
-      case 3:
-        pool = random_char_alpha;
-        break;
-      case 4:
-        pool = random_char_alphanum;
-        break;
-      case 5:
-        pool = random_char_alphanum_special;
-        break;
-      default:
-        DEBUG_cerr << "Complexity cannot be greater than 4, less than 0. Complexity Set to 3." << endl; 
-        pool = random_char_alpha;
-        break;
-    } 
-    const unsigned int stringPoolLength = strlen(pool);
+    const char* pool = _getRandomStringPool(complexity);
+    const unsigned int strPoolLength = strlen(pool);
     for (size_t i = 0; length > i; i++) {
-      dest[i] =  pool[rand() % stringPoolLength];
+      dest[i] =  pool[rand() % strPoolLength];
     } 
   }
 
+  const char* _getRandomStringPool(const unsigned complexity) {
+    switch (complexity) {
+      case 0: return random_char_numbers;
+      case 1: return random_char_alphaupper;
+      case 2: return random_char_alphauppernum;
+      case 3: return random_char_alpha;
+      case 4: return random_char_alphanum;
+      case 5: return random_char_alphanum_special;
+      default:
+        LOG_warn << "Complexity cannot be greater than 4, less than 0. Complexity Set to 3." << endl; 
+        return random_char_alpha;
+    } 
+    assert(false && "Should Never Reach this point.");
+    return nullptr;
+  }
 
-  bool UriDecode (const void* address, const size_t length, string* decoded) {
+
+  bool UriDecode (const void* address, const size_t length, std::string* decoded) {
     decoded->clear();
     decoded->reserve(length);
 
@@ -749,8 +806,10 @@ namespace String {
     return true;
   }
 
-  string* UriDecode (const void* address, const size_t length) {
-    string* decoded = new string();
+  std::string* UriDecode (const void* address, const size_t length) {
+    DEPRECATED_FUNC("UriDecode(conststd::string&)");
+
+    std::string* decoded = new std::string();
     decoded->reserve(length);
 
     char* c = (char*) address;
@@ -812,8 +871,8 @@ namespace String {
     return decoded;
   }
 
-  string UriDecode (const string& uri) {
-    string decoded;
+  std::string UriDecode (const std::string& uri) {
+    std::string decoded;
     decoded.reserve(uri.length());
 
     char* c = const_cast<char*>(uri.c_str());
@@ -938,7 +997,7 @@ namespace String {
   }
 
   size_t TrimIncompleteUTF8(std::string& str) {
-    // Scans backward from the end of string.
+    // Scans backward from the end of std::string.
     //const char* begptr = &str.front();
     const char* cptr = &str.back();
     int num = 1;
@@ -969,6 +1028,7 @@ namespace String {
       cptr -= 1;
     }
     str.resize(str.length() - numBytesToTruncate);
+    DEBUG_result << "Trimmed " << numBytesToTruncate << " incomplete UTF-8 bytes."<< endl;
     return numBytesToTruncate;
   }
 
@@ -1004,29 +1064,38 @@ namespace String {
   bool IsSafeForJson(const std::string& str) {
     // Rename this function IsSafeJsonString() later
     // #REF: http://www.ietf.org/rfc/rfc4627.txt
+#if 0
     if (str.back() == '\\') {
       DEBUG_cerr << "Cannot end with Backslash." << endl;
       return false;
     }
-    for (int i = 0; i < str.length(); ++i) {
+#endif
+
+    bool result = true;
+    for (size_t i = 0; i < str.length(); ++i) {
       const char* c = &str[i];
       switch (*c) {
         case '\n': 
         case '\r':
-          DEBUG_cerr << "Detected newLine" << endl;
-          return false;
+          DEBUG_result << "Detected newLine" << endl;
+          result = false;
+          break;
         case '"':
-          DEBUG_cerr << "Detected double quotes" << c << endl;
-          return false;
+          DEBUG_result << "Detected double quotes" << c << endl;
+          result = false;
+          break;
         case '\t':
-          DEBUG_cerr << "Detected tab." << endl;
-          return false;
+          DEBUG_result << "Detected tab." << endl;
+          result = false;
+          break;
         case '\b':
-          DEBUG_cerr << "Detected \\b." << endl;
-          return false;
+          DEBUG_result << "Detected \\b." << endl;
+          result = false;
+          break;
         case '\f':
-          DEBUG_cerr << "Detected \\f" << c << endl;
-          return false;
+          DEBUG_result << "Detected \\f" << c << endl;
+          result = false;
+          break;
         case '\\':
           switch (*(++c)) {
             case '\\':
@@ -1038,16 +1107,23 @@ namespace String {
               // Well escaped chars so Continue
               continue;
             default:
-              DEBUG_cerr << "Invalid escaped char" << endl;
-              return false;
+              DEBUG_result << "Invalid escaped char" << endl;
+              result = false;
+              break;
           }
 
         default:
           break;
       } 
+      if (result == false) {
+        break;
+      }
     }
 
-    return true;
+    if (result == false) {
+      LOG_secwarn << "Json Validation has failed." << endl;
+    }
+    return result;
   }
 
   bool IsUserInputSafe(const std::string& str) {
@@ -1064,7 +1140,7 @@ namespace String {
 
   // THIS IS REALLY BAD AND DANGEROUS FUNCTION.
   // DON'T USE IT OTHER THAN TEMPORARY DEVELOPMENT PURPOSE.
-  size_t Append(char* ptr, const string& str, size_t pos) {
+  size_t Append(char* ptr, const std::string& str, size_t pos) {
     DEBUG_cerr << "This function is DANGEROUS and should not be used for Production." << endl; 
     ptr += pos;
     strncpy(ptr, str.c_str(), str.length());
@@ -1084,10 +1160,10 @@ using namespace lio;
 int main() {
 
   srand (time(NULL));
-  string testStr = "abcABC .,;/";
+  std::string testStr = "abcABC .,;/";
   
-  string upper = Util::String::ToUpper(testStr);
-  string lower = Util::String::ToLower(testStr);
+  std::string upper = Util::String::ToUpper(testStr);
+  std::string lower = Util::String::ToLower(testStr);
 
   UnitTest::Test<string>(upper, "ABCABC .,;/", "Upper Case");
   UnitTest::Test<string>(lower, "abcabc .,;/", "Lower Case");

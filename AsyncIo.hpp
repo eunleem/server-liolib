@@ -1,5 +1,5 @@
 #ifndef _ASYNCIO_HPP_
-#define _ASYNCID_HPP_
+#define _ASYNCIO_HPP_
 
 /*
   Name
@@ -12,7 +12,7 @@
     Provides Asynchronous (event-based) input output.
 
   Last Modified Date
-    Mar 26, 2014
+    Sep 24, 2015
 
   History
     July 17, 2013
@@ -34,20 +34,6 @@
   Copyright (c) All Rights reserved to LIFEINO.
 */
 
-
-/*
- * HEADER ORDER
- *
- *  DEBUG.hpp first
- 
- *  Std C++ Library
- *  Ported C library
- *
- *  Classic C Library
- *  System Library
- *
- *  My Library
- */
 
 #ifdef _DEBUG
   #undef _DEBUG

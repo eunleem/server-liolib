@@ -7,13 +7,13 @@
 #define _DEBUG false
 
 #include "liolib/Debug.hpp"
+#include "liolib/Test.hpp"
 
 #include <iostream>
 #include <string> // string
 
 #include <cstring> // strlen() 
 #include <cassert> // assert()
-
 
 namespace lio {
 
@@ -29,7 +29,6 @@ class DataBlock {
 public:
   DataBlock() {
     DEBUG_cerr << "DataBlock should be used for pointer object only." << endl; 
-    //assert(!"CANNOT BE USED.");
     throw std::exception();
   }
 

@@ -407,7 +407,7 @@ bool HttpRequest::SetCookies(const string& fieldValue) {
     return false;
   } 
 
-  value = temp;
+  value = std::move(temp);
   string decodedValue = Util::String::UriDecode(value);
   this->cookies[key] = decodedValue;
   count += 1;

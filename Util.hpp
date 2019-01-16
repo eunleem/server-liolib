@@ -9,7 +9,7 @@
     [ETL] Eun T. Leem (eunleem@gmail.com)
 
   Last Modified Date
-    Jul 30, 2015
+    Sep 28, 2015
   
   History
     September 23, 2013
@@ -31,6 +31,7 @@
 */
 
 
+
 #include <algorithm> 
 #include <cctype>
 #include <chrono>
@@ -41,7 +42,7 @@
 #include <iomanip> // put_time
 #include <locale>
 #include <string>
-#include <sstream> // stringstream
+#include <sstream> // std::stringstream
 #include <vector> // vector<>()
 #include <utility>
 
@@ -49,6 +50,7 @@
 #include <cstdlib> // srand rand
 #include <ctime> // time_t time() gmtime() strftime() struct tm
 #include <cstring> // memset()
+#include <cctype> // toupper(), tolower()
 
 #include <dirent.h> // opendir()
 #include <sys/ipc.h> // ftok()
@@ -56,6 +58,10 @@
 #include <sys/stat.h> // stat() mkdir()
 #include <unistd.h> // fcntl(), getpagesize()
 #include <fcntl.h> // fcntl()
+
+#include <sys/socket.h> // getaddrinfo(), gai_strerror()
+#include <netdb.h> // getaddrinfo(), gai_strerror()
+#include <sys/un.h> // sockaddr_un, UNIX_PATH_MAX // I copied UNIX_PATH_MAX from linux/un.h to sys/un.h
 
 #include <errno.h> //
 
@@ -68,32 +74,45 @@
   #undef _DEBUG
 #endif
 #define _DEBUG false
-#include "liolib/Debug.hpp"
 
-using std::cout;
-using std::cerr;
+#include "liolib/Debug.hpp"
+#include "liolib/Test.hpp"
+
 using std::endl;
-using std::string;
-using std::vector;
 
 
 typedef std::chrono::system_clock::time_point datetime;
 typedef std::chrono::steady_clock::time_point steadytime;
 
+enum class Result : int {
+  SUCCESSFUL = 0,
+  GOOD = 0,
+  ERROR = -1,
+  FAIL = -1,
+  STOP = -100,
+  INTERRUPT = -100,
+  RETRY = -200
+};
+
 namespace Util
 {
-  bool        IsDirectoryExistent ( const string& );
-  bool        IsDirectoryExisting ( const char* );
-  bool        IsDirectoryExisting ( const string& );
+bool IsDirectoryExistent(const std::string&);
+  bool IsDirectoryExisting(const char*);
+  bool IsDirectoryExisting(const std::string&);
 
-  bool        IsFileExistent ( const string& filePath, bool ifNotCreate = false );
-  bool        IsFileExisting ( const char* filePath, bool ifNotCreate = false );
-  bool        IsFileExisting ( const string& filePath, bool ifNotCreate = false );
+  bool IsFileExistent(const std::string& filePath, bool ifNotCreate = false);
+  bool IsFileExisting(const char* filePath, bool ifNotCreate = false);
+  bool IsFileExisting(const std::string& filePath, bool ifNotCreate = false);
 
-  key_t       GenerateUniqueKey (string& keyFilePath, int projId = 1 );
+  key_t GenerateUniqueKey(std::string& keyFilePath, int projId = 1);
 
-  std::string Timestamp();
-  std::string TimeToString(std::chrono::system_clock::time_point tp);
+  bool Retry(std::function<Result()> tryWhat, unsigned int numRetry = 3,
+             unsigned int intervalSeconds = 10);
+
+namespace Convert {
+  std::string ToString(const struct sockaddr& in_addr);
+  uint32_t ToUInt32(const struct sockaddr& in_addr);
+}
 
 namespace Test {
   size_t RandomNumber(size_t max, size_t min = 0);
@@ -102,48 +121,88 @@ namespace Test {
 namespace File {
   ssize_t GetSize(std::fstream& file);
 
-  bool IsDirectoryExistent ( const string& );
-  bool IsDirectoryExisting ( const char* );
-  bool IsDirectoryExisting ( const string& );
+  bool IsDirectoryExistent(const std::string& path);
+  bool IsDirectoryExisting(const char* path, bool ifNotCreate = false);
+  bool IsDirectoryExisting(const std::string& path, bool ifNotCreate = false);
 
-  bool IsFileExistent ( const string& filePath, bool ifNotCreate = false );
-  bool IsFileExisting ( const char* filePath, bool ifNotCreate = false );
-  bool IsFileExisting ( const string& filePath, bool ifNotCreate = false );
+  bool IsFileExistent(const std::string& filePath, bool ifNotCreate = false);
+  bool IsFileExisting(const char* filePath, bool ifNotCreate = false);
+  bool IsFileExisting(const std::string& filePath, bool ifNotCreate = false);
 
-  bool _isFileExisting ( const char* filePath, bool ifNotCreate = false );
-  bool _isDirectoryExisting ( const char* );
+  inline bool _isFileExisting(const char* filePath, bool ifNotCreate = false);
+  inline bool _isDirectoryExisting(const char*);
 
-  bool CreateDirectory(std::string path);
+  bool CreateDirectory(const std::string& path);
 
   bool Rename(std::string oldName, std::string newName);
   bool Remove(std::string filePath);
 
-  template<typename LEN_T>
-  ssize_t WriteString(std::ostream& os, const std::string& str) {
+  template <typename LEN_T = uint32_t>
+  ssize_t WriteString(std::ostream& os, const std::string& str,
+                      unsigned fixedMaxLength = 0) {
+    static_assert(std::is_same<LEN_T, uint64_t>::value ||
+                      std::is_same<LEN_T, uint32_t>::value ||
+                      std::is_same<LEN_T, uint16_t>::value ||
+                      std::is_same<LEN_T, uint8_t>::value,
+                  "WriteString<T>: T must be uintXY_t");
+
     LEN_T strlen = static_cast<LEN_T>(str.length());
     os.write((char*)&strlen, sizeof(strlen));
     os.write(str.c_str(), strlen);
 
+    if (fixedMaxLength > 0) {
+      if (fixedMaxLength < str.length()) {
+        LOG_alert << "String length exceeds the fixedMaxLength. "
+                     "strlen: " << str.length() << endl;
+      }
+      const unsigned skip = fixedMaxLength - str.length();
+      for (unsigned i = 0; i < skip; ++i) {
+        os.write("\0", 1);
+      }
+    }
+
     return strlen;
   }
 
-  template<typename LEN_T>
-  ssize_t ReadString(std::istream& is, std::string& str) {
-    LEN_T strlen = 0;
-    is.read((char*)&strlen, sizeof(strlen));
-    str.resize(strlen);
-    is.read((char*)str.c_str(), strlen);
+  template <typename LEN_T = uint32_t>
+  ssize_t ReadString(std::istream& is, std::string& str,
+                     unsigned fixedMaxLength = 0) {
+    static_assert(std::is_same<LEN_T, uint64_t>::value ||
+                      std::is_same<LEN_T, uint32_t>::value ||
+                      std::is_same<LEN_T, uint16_t>::value ||
+                      std::is_same<LEN_T, uint8_t>::value,
+                  "ReadString<T>: T must be uintXY_t");
+
+    LEN_T storedStrLength = 0;
+    is.read((char*)&strlen, sizeof(storedStrLength));
+    str.resize(storedStrLength);
+    is.read(const_cast<char*>(str.c_str()), storedStrLength);
+
+    if (fixedMaxLength > 0) {
+      if (fixedMaxLength < str.length()) {
+        LOG_alert << "Stored length exceeds Max Length or Fixed length. "
+                     "storedLength: " << str.length() << endl;
+      }
+      const unsigned skip = fixedMaxLength - str.length();
+      char a;
+      for (unsigned i = 0; i < skip; ++i) {
+        is.read(&a, 1);
+      }
+    }
 
     return str.length();
   }
 
-  ssize_t WriteString(std::ostream& os, const std::string& str);
-  ssize_t ReadString(std::istream& is, std::string& str);
+  ssize_t WriteString(std::ostream& os, const std::string& str,
+                      unsigned fixedLength = 0);
+  ssize_t ReadString(std::istream& is, std::string& str,
+                     unsigned fixedLength = 0);
 }
   
 namespace Time {
   datetime GetNow();
   uint64_t GetMillisecondsSinceEpoch(datetime tp = GetNow());
+  uint64_t GetMillisecondsSinceEpoch(steadytime tp);
 
   datetime GetTimepoint(
       uint16_t year = 0,
@@ -155,14 +214,15 @@ namespace Time {
       bool getUtc = false);
 
 
-  std::string Timestamp(const string& format = "%F %T %Z");
+  std::string Timestamp(const std::string& format = "%F %T %Z", bool in_localtime = true);
   std::string TimestampNum();
-  std::string TimeToString(const datetime tp, const string& format = "%F %T %Z");
-  std::string TimeToString(const steadytime tp, const string& format = "%F %T %Z");
+  std::string TimeToString(const datetime tp, const std::string& format = "%F %T %Z");
+  std::string TimeToString(const steadytime tp, const std::string& format = "%F %T %Z");
 
-  std::string ToString(const datetime tp, const string& format = "%F %T %Z");
+  std::string ToString(const steadytime tp, const std::string& format = "%F %T %Z", bool in_localtime = true);
+  std::string ToString(const datetime tp, const std::string& format = "%F %T %Z", bool in_localtime = true);
 
-  std::string ToString(const time_t rawTime, const string& format = "%F %T %Z");
+  std::string ToString(const time_t rawTime, const std::string& format = "%F %T %Z", bool in_localtime = true);
   
 
   time_t steady_clock_to_time_t(const std::chrono::steady_clock::time_point tp);
@@ -173,7 +233,7 @@ namespace String {
   
   // To<T> only support, double, float, ulong, uint, short, ushort. NO int8_t or uint8_tc
   template<typename TYPE>
-  TYPE To(const string& value) {
+  TYPE To(const std::string& value) {
     std::stringstream ss;
     ss << value;
     TYPE convertedValue;
@@ -192,13 +252,17 @@ namespace String {
 
   // trim from start
   static inline std::string& TrimBeg(std::string &s) {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+    s.erase(s.begin(),
+            std::find_if(s.begin(), s.end(),
+                         std::not1(std::ptr_fun<int, int>(std::isspace))));
     return s;
   }
 
   // trim from end
   static inline std::string& TrimEnd(std::string &s) {
-    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(
+                                                   std::isspace))).base(),
+            s.end());
     return s;
   }
 
@@ -214,10 +278,12 @@ namespace String {
   bool Compare(char* location, size_t length, const std::string& str);
 
   std::string Retrieve(char* location, size_t length);
-  
+
+  std::string CaptureBetween(const std::string& src, unsigned startOffset,
+                             const std::string& endStr);
   // 0 = UNLIMITED
   std::string RetrieveBetween(char* startLocation,
-                         const string& endStr,
+                         const std::string& endStr,
                          size_t lengthMax = 1024 * 8); // 8KB Length Limit
   
 
@@ -235,21 +301,27 @@ namespace String {
   std::string     ToUpper(const std::string& value);
   std::string     ToLower(const std::string& value);
 
+  std::vector<std::string>&   Split(const std::string &s, char delim, std::vector<std::string>& elems);
+  std::vector<std::string>    Split(const std::string &s, char delim);
+
+
   std::vector<std::string>
                   Tokenize(const std::string& source,
                            const std::string& delimiter);
 
-  //string          Replace(const string& value);
-  //string          Trim(const string& value);
+  //string          Replace(const std::string& value);
+  //string          Trim(const std::string& value);
 
   bool            CaseInsensitiveCompare(const std::string& rvalue, const std::string& lvalue);
 
   std::string     RandomString(const size_t length, const unsigned int complexity = 2);
   void            RandomString(char* dest, const size_t length, const unsigned int complexity = 2);
 
-  string*         UriDecode(const void* address, const size_t length); 
-  string          UriDecode(const string& uri); 
-  bool            UriDecode(const void* address, const size_t length, string* decoded); 
+  const char*     _getRandomStringPool(const unsigned complexity);
+
+  std::string*    UriDecode(const void* address, const size_t length); 
+  std::string     UriDecode(const std::string& uri); 
+  bool            UriDecode(const void* address, const size_t length, std::string* decoded); 
   ssize_t         UriDecodeFly(char* ptr, size_t length);  // Returns finished length;
 
 
@@ -262,7 +334,7 @@ namespace String {
 
   bool            IsUserInputSafe(const std::string& str);
 
-  size_t          Append(char* ptr, const string& str, size_t pos);
+  size_t          Append(char* ptr, const std::string& str, size_t pos);
 
 
 

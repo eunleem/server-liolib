@@ -12,7 +12,7 @@
     Provides Asynchronous Socket (event-based) input.
 
   Last Modified Date
-    Apr 11, 2015
+    Sep 29, 2015
 
   History
     July 17, 2013
@@ -70,6 +70,7 @@
 
 #include <string> // std::string
 #include <map> // std::map
+#include <unordered_map> // std::map
 #include <list> // std::list
 
 #include <cstdio> // NULL
@@ -90,8 +91,6 @@
 
 namespace lio {
 
-using std::string;
-using std::map;
 
 class AsyncSockets {
 public:
@@ -137,38 +136,6 @@ private:
     CLOSED
   };
 
-  struct Connection {
-    Connection() :
-      in_len(0),
-      portNumber(0),
-      isSecure(false)
-    { }
-    Connection(struct sockaddr& in_addr, socklen_t& in_len,
-        uint16_t portNumber = 0, bool isSecure = false) :
-      in_addr(in_addr),
-      in_len(in_len),
-      portNumber(portNumber),
-      isSecure(isSecure)
-    { }
-    Socket::SocketFamily GetAddressFamily() const {
-      switch (this->in_addr.sa_family) {
-        case PF_UNIX:
-          return Socket::SocketFamily::LOCAL;
-        case PF_INET:
-          return Socket::SocketFamily::IPv4;
-        case PF_INET6:
-          return Socket::SocketFamily::IPv6;
-      } 
-      return Socket::SocketFamily::UNDEF;
-    }
-    const char* GetAddressData() const {
-      return this->in_addr.sa_data;
-    }
-    struct sockaddr in_addr;
-    socklen_t in_len;
-    uint16_t portNumber;
-    bool isSecure;
-  };
 
   struct FdEventArgs {
     enum class EventType : uint8_t {
@@ -189,14 +156,6 @@ private:
     const int socketFd;
   };
 
-  struct AcceptEventArgs {
-    AcceptEventArgs(int acptFd, Connection connection) :
-      acceptFd(acptFd),
-      connection(connection) { }
-    const int acceptFd;
-    const Connection connection;
-  };
-
   
   AsyncSockets ();
 
@@ -205,36 +164,30 @@ private:
 
   // For Domain Socket
   Socket*       AddSocket(
-                  const string& sockName,
-                  const Socket::SocketFamily sockFamily = Socket::SocketFamily::LOCAL,
-                  const Socket::SocketType sockType = Socket::SocketType::TCP);
+                  const std::string& sockName,
+                  const SocketFamily sockFamily = SocketFamily::LOCAL,
+                  const SocketType sockType = SocketType::TCP);
 
   // For Network Socket
   Socket*       AddSocket(
                   const uint16_t portNumber,
-                  const Socket::SocketFamily sockFamily = Socket::SocketFamily::IP,
-                  const Socket::SocketType sockType = Socket::SocketType::TCP);
+                  const SocketFamily sockFamily = SocketFamily::IP,
+                  const SocketType sockType = SocketType::TCP);
 
   int           GetEpollFd() const;
   void          SetNumMaxEvent(const int maxEvent);
 
   int           GetSocketFd(uint16_t portNumber) const;
-  int           GetSocketFd(const string& sockName) const;
+  int           GetSocketFd(const std::string& sockName) const;
 
   void          Listen(const uint16_t portNumber);
-  void          Listen(const string& sockName);
+  void          Listen(const std::string& sockName);
+  void          ListenAll();
 
   void          Wait();
 
-  //void          Connect(const string& sockName);
-  //void          Connect(const uint16_t portNumber, const string& destIpAddr);
-
-  //int           Write(const string& content);
-  //int           Write(const void* dataLocation, const size_t length);
-  //ssize_t       Read(string* content);
-
   void          Close(uint16_t portNumber);
-  void          Close(const string& sockName);
+  void          Close(const std::string& sockName);
 
   static
   int           createEpoll();
@@ -252,8 +205,8 @@ protected:
   void          OnFdEvent(const FdEventArgs& event) = 0;
   
   
-  std::map<uint16_t, std::pair<Socket*, Socket::SocketMode>> networkSockets_;
-  std::map<string, std::pair<Socket*, Socket::SocketMode>> domainSockets_;
+  std::map<uint16_t, std::pair<Socket*, SocketMode>> networkSockets_;
+  std::map<std::string, std::pair<Socket*, SocketMode>> domainSockets_;
 
   int           numMaxEvent_;
 

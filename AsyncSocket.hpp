@@ -12,7 +12,7 @@
     Provides Asynchronous Socket (event-based) input.
 
   Last Modified Date
-    Dec 02, 2014
+    Sep 29, 2015
 
   History
     July 17, 2013
@@ -67,6 +67,8 @@
 #define _DEBUG true
 
 #include "liolib/Debug.hpp" // DEBUG, DEBUG_cout, DEBUG_cerr
+#include "liolib/Log.hpp" //
+#include "liolib/Test.hpp"
 
 #include <string> // std::string
 #include <map> // std::map
@@ -136,24 +138,6 @@ private:
     STOPPED
   };
 
-  struct Connection {
-    Connection() {}
-    Connection(struct sockaddr& in_addr, socklen_t& in_len) :
-      in_addr(in_addr),
-      in_len(in_len)
-    { }
-    Connection(struct sockaddr& in_addr, socklen_t& in_len,
-        uint16_t portNumber, bool isSecure = false) :
-      in_addr(in_addr),
-      in_len(in_len),
-      portNumber(portNumber),
-      isSecure(isSecure)
-    { }
-    struct sockaddr in_addr;
-    socklen_t in_len;
-    uint16_t portNumber;
-    bool isSecure;
-  };
 
   struct FdEventArgs {
     enum class EventType : uint8_t {
@@ -174,22 +158,12 @@ private:
     const int socketFd;
   };
 
-  struct AcceptEventArgs {
-    AcceptEventArgs(int acptFd, Connection connection) :
-      acceptFd(acptFd),
-      connection(connection) { }
-    const int acceptFd;
-    const Connection connection;
-  };
+  AsyncSocket (const SocketFamily sockFamily = SocketFamily::IP,
+               const SocketType sockType = SocketType::TCP);
 
-  
-  AsyncSocket (const Socket::SocketFamily sockFamily = Socket::SocketFamily::IP,
-               const Socket::SocketType sockType = Socket::SocketType::TCP);
-
-  AsyncSocket (const int existingFd,
-               Socket::SocketMode mode,
-               const Socket::SocketFamily sockFamily = Socket::SocketFamily::IP,
-               const Socket::SocketType sockType = Socket::SocketType::TCP);
+  AsyncSocket(const int existingFd, SocketMode mode,
+              const SocketFamily sockFamily = SocketFamily::IP,
+              const SocketType sockType = SocketType::TCP);
 
   virtual
   ~AsyncSocket ();
@@ -202,19 +176,17 @@ private:
   // For socket that already established connection.
   void          Listen();
 
-  void          Listen(const string& sockName);
+  void          Listen(const std::string& sockName);
   void          Listen(const uint16_t portNumber);
 
-  void          ListenFirst(const uint16_t portNumber);
-  void          ListenSecond(const uint16_t portNumber);
   void          Wait();
 
-  void          Connect(const string& sockName);
-  void          Connect(const uint16_t portNumber, const string& destIpAddr);
+  void          Connect(const std::string& sockName);
+  void          Connect(const uint16_t portNumber, const std::string& destIpAddr);
 
-  int           Write(const string& content);
+  int           Write(const std::string& content);
   int           Write(const void* dataLocation, const size_t length);
-  ssize_t       Read(string* content);
+  ssize_t       Read(std::string* content);
 
   void          Stop();
   void          StopGracefully();
@@ -235,8 +207,8 @@ protected:
   void          OnFdEvent(const FdEventArgs& event);
   
   
-  Socket*             socket_;
-  Socket::SocketMode  mode_;
+  Socket*       socket_;
+  SocketMode    mode_;
 
   int           numMaxEvent_;
 
